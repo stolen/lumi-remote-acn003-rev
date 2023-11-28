@@ -130,9 +130,71 @@ I was able to `wget` the URL, but in a couple of minutes the url was dead.
 So, I finally had an OTA file for FW version `0.0.0-0003`.  
 
 ## Restoring the fresh OTA
-I looked at `hexdump` of the `0.0.0-0003` OTA and fast-forwarded to the very end. It has some strings, some bytes, some `FF`s, 4 bytes of something like checksum and then EOF.  
+I looked at `hexdump` of the `0.0.0-0003` OTA and fast-forwarded to the very end. It has some strings, some bytes, some `FF`s, 4 bytes of something like checksum and then EOF:  
+```shell
+0002b750  01 00 00 00 61 69 6f 74  2d 7a 69 67 62 65 65 33  |....aiot-zigbee3|
+0002b760  2e 30 2d 61 75 74 68 00  6d 69 6f 74 2d 7a 69 67  |.0-auth.miot-zig|
+0002b770  62 65 65 33 2e 30 2d 61  75 74 68 00 4d 19 01 00  |bee3.0-auth.M...|
+0002b780  39 16 01 00 31 16 01 00  35 16 01 00 01 01 00 00  |9...1...5.......|
+0002b790  02 00 00 00 03 00 00 00  06 00 00 00 05 00 00 00  |................|
+0002b7a0  01 00 00 00 06 00 00 00  b4 7b 02 00 01 bc b2 02  |.........{......|
+0002b7b0  00 04 9c b2 02 00 04 00  0b 3f 00 00 03 00 00 00  |.........?......|
+0002b7c0  00 00 00 00 0b 2b 5f 11  65 34 01 00 00 00 5f 11  |.....+_.e4...._.|
+0002b7d0  08 00 00 00 01 00 00 00  02 00 00 00 00 00 4c 55  |..............LU|
+0002b7e0  4d 49 11 5f 41 51 41 52  41 2b 0b 00 00 00 00 00  |MI._AQARA+......|
+0002b7f0  00 61 88 00 fe ca 00 00  01 00 24 00 1e 00 00 00  |.a........$.....|
+0002b800  06 00 00 00 aa bb cc dd  ee ff 00 00 00 00 00 00  |................|
+0002b810  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+0002b880  0c 00 00 00 ff 00 00 00  0b 00 00 00 fe ff 00 00  |................|
+0002b890  58 02 84 03 97 04 01 00  80 00 00 00 ff ff ff ff  |X...............|
+0002b8a0  9b 21 e9 2d                                       |.!.-|
+0002b8a4
+```
 I opened the original flash dump, found a very similar part, and exported a range from the beginning to the checksum.  
+```shell
+00026c50  00 00 00 00 01 00 00 00  61 69 6f 74 2d 7a 69 67  |........aiot-zig|
+00026c60  62 65 65 33 2e 30 2d 61  75 74 68 00 6d 69 6f 74  |bee3.0-auth.miot|
+00026c70  2d 7a 69 67 62 65 65 33  2e 30 2d 61 75 74 68 00  |-zigbee3.0-auth.|
+00026c80  0d 15 01 00 15 14 01 00  0d 14 01 00 11 14 01 00  |................|
+00026c90  01 01 00 00 05 00 00 00  03 00 00 00 02 00 00 00  |................|
+00026ca0  06 00 00 00 01 00 00 00  06 00 00 00 88 60 02 00  |.............`..|
+00026cb0  01 48 67 02 00 04 28 67  02 00 04 00 0b 3f 00 00  |.Hg...(g.....?..|
+00026cc0  07 00 00 00 00 00 00 00  0b 2b 5f 11 ed 22 01 00  |.........+_.."..|
+00026cd0  00 00 5f 11 08 00 00 00  01 00 00 00 02 00 00 00  |.._.............|
+00026ce0  00 00 4c 55 4d 49 11 5f  41 51 41 52 41 2b 0b 00  |..LUMI._AQARA+..|
+00026cf0  00 00 00 00 00 61 88 00  fe ca 00 00 01 00 24 00  |.....a........$.|
+00026d00  06 00 00 00 aa bb cc dd  ee ff 00 00 00 00 00 00  |................|
+00026d10  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00026d80  0c 00 00 00 ff 00 00 00  0b 00 00 00 fe ff 00 00  |................|
+00026d90  58 02 84 03 97 04 01 00  80 00 00 00 ff ff ff ff  |X...............|
+00026da0  cf 61 54 92 ff ff ff ff  ff ff ff ff ff ff ff ff  |.aT.............|
+00026db0  ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  |................|
+*
+```
 Starting from `00040000` there is other firmware copy (one of them works, other is used for OTA). I exported that too.  
+```shell
+00067750  61 69 6f 74 2d 7a 69 67  62 65 65 33 2e 30 2d 61  |aiot-zigbee3.0-a|
+00067760  75 74 68 00 6d 69 6f 74  2d 7a 69 67 62 65 65 33  |uth.miot-zigbee3|
+00067770  2e 30 2d 61 75 74 68 00  35 26 01 00 3d 25 01 00  |.0-auth.5&..=%..|
+00067780  35 25 01 00 39 25 01 00  01 01 00 00 05 00 00 00  |5%..9%..........|
+00067790  03 00 00 00 02 00 00 00  06 00 00 00 01 00 00 00  |................|
+000677a0  06 00 00 00 78 6b 02 00  01 4c 72 02 00 04 2c 72  |....xk...Lr...,r|
+000677b0  02 00 04 00 0b 3f 00 00  09 00 00 00 00 00 00 00  |.....?..........|
+000677c0  0b 2b 5f 11 0d 34 01 00  00 00 5f 11 08 00 00 00  |.+_..4...._.....|
+000677d0  01 00 00 00 02 00 00 00  00 00 4c 55 4d 49 11 5f  |..........LUMI._|
+000677e0  41 51 41 52 41 2b 0b 00  06 00 00 00 aa bb cc dd  |AQARA+..........|
+000677f0  ee ff 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00067800  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00067860  00 00 00 00 00 00 00 00  00 00 00 00 00 61 88 00  |.............a..|
+00067870  fe ca 00 00 01 00 24 00  0c 00 00 00 ff 00 00 00  |......$.........|
+00067880  0b 00 00 00 fe ff 80 00  ff ff ff ff ff ff ff ff  |................|
+00067890  c9 79 fb 46 ff ff ff ff  ff ff ff ff ff ff ff ff  |.y.F............|
+000678a0  ff ff ff ff ff ff ff ff  ff ff ff ff ff ff ff ff  |................|
+*
+```
 
 `make_ota.py` from [z03mmc project](https://github.com/devbis/z03mmc) handled all three files well. Time to try updating with z2m.  
 
