@@ -21,7 +21,7 @@ Also reverting to the original firmware via OTA would be great, and I didn't hav
 
 ## What didn't work
 At first I was going to sniff traffic in order to see how the proprietary hub does the OTA.  
-I paired a switch and dumped flash contents (needed some tricks for that), compared it with clean dump and a dump when paired to my z2m with known key.  
+I paired a switch and dumped flash contents (needed some [tricks](fw/read-when-registered.sh) for that), compared it with clean dump and a dump when paired to my z2m with known key.  
 So I got a network key and a channel. Later I discovered I could just check hub info in app for channel and sniff a join dialog for the key.  
 
 There seemed to be few ways I possibly could see an OTA in action:
@@ -197,6 +197,7 @@ Starting from `00040000` there is other firmware copy (one of them works, other 
 ```
 
 `make_ota.py` from [z03mmc project](https://github.com/devbis/z03mmc) handled all three files well. Time to try updating with z2m.  
+The binaries can be found in `fw/` directory
 
 ## Messing with file versions
 And as earlier the update did not work — the switch ignored the command. Also the hub itself could not apply the OTA. But it should work somehow!  
