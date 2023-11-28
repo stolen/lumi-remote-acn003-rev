@@ -32,8 +32,9 @@ All that failed.
   * The hub uses some crypted handshake when joining a device (some varying data to device and some varying data back) and didn't accept my firmware
   * I changed some bytes in original dump from 9 to 8, that changed a version z2m sees when attempting an OTA, but vendor app continued to report `0.0.0-0009` version
 
-Also I took a risk of losing telnet and upgraded the hub (hoping it then would suggest a fresh FW for the switch). Still no update, but it took few hours to restore telnet.  
-(TODO: insert useful links)
+Also I took a risk of losing telnet and upgraded the hub (hoping it then would suggest a fresh FW for the switch). Still no update, but it took few hours for me to restore telnet.  
+  * [Enable telnet by button clicks](https://github.com/niceboygithub/AqaraGateway/blob/master/README.md#manually-enable-telnet): 5-2-2-2-2-2 (led blinks green 2 times)
+  * [Make telnet persistent](https://github.com/zvldz/aqcn02_fw/tree/main/update#the-easy-way) -- that also gives you `socat`
 
 ## Looking for other ways to attack the hub
 So, if I could not hijack the Zigbee part, maybe I could interfere on the hub software on other level?  
@@ -60,9 +61,10 @@ Then, I restarted the MQTT broker (Mosquitto) with verbose logging and saw the s
 The connection to the cloud is protected (obviously), so before messing with TLS MITM, I concentrated on MQTT side.
 
 ### Version report in MQTT
-I downloaded `socat` binary (before I applied [modification](https://github.com/zvldz/aqcn02_fw/tree/main/update#the-easy-way) which adds it to GW), started it as a TCP proxy `1884 -> localhost:1883`, connected with MQTT client (MQTTX in my case) and subscribed to the topics miio_client subscribes.  
+I started socat as a TCP proxy `1884 -> localhost:1883`, connected with MQTT client (MQTTX in my case) and subscribed to the topics `miio_client` subscribes.  
 Found lots of events, and payload in one of them was ending with `302E302E302D30303039` — which is the version `0.0.0-0009` shown by the app. Nice! Let's try to hijack that thing!  
 Using the MQTTX I copy-pasted the original message and changed last char from 9 to 8. Et voilà! The app reported `0.0.0-0008` but still no update.  
+![manual version fix](pictures/manual_version_fix.png)
 I tried changing other bytes of that message but for no avail.  
 Repeating that message on other handshake didn't work at all.  
 
@@ -70,17 +72,45 @@ Manual repeating was quite hard and unreliable, I wanted to modify the message o
 
 ### Spoofing the version in real time
 I needed some way to modify the original message. I was thinking on some MQTT proxy between the vendor software and MQTT.  
-I started Mosquitto on my laptop, restarted Mosquitto on the hub to listen on different port (to make supervisor happy), used socat to forward traffic.  
+I started Mosquitto on my laptop (allowing anonymous connections from external addresse),
+restarted Mosquitto on the hub to listen on different port (to make supervisor happy),
+used socat to forward traffic:  
+```
+# killall -9 mosquitto; mosquitto -p 1884 -d
+# socat tcp-listen:1883,fork,reuseaddr tcp-connect:172.31.31.108:1883
+```
 The hub was still functioning, it was time to modify the message.  
 
 The only proxy I could find was [Janus](https://github.com/phoenix-mstu/janus-mqtt-proxy), but I didn't figure out how to configure it.  
 So I went with other option — run an MQTT broker I could easily hack. As I'm familiar with [Erlang](https://www.erlang.org/), I was looking for a broker in this language.  
 [emqx](https://github.com/emqx/emqx) turned out to be a huge monstruosity, and I looked for something else.  
-[VerneMQ](https://github.com/vernemq/vernemq) is much better for me. I started it and ensured the hub was still functional with it.
+[VerneMQ](https://github.com/vernemq/vernemq) is much better for me. I started it and ensured the hub was still functional with it.  
+I used `console` command to keep the broker in foreground and to have a shell:
+```
+$ make rel
+$ cd $VERNEMQ/_build/default/rel/vernemq
+$ bin/vernemq console
+```
 
 After reading the sources and tracing some calls I found VerneMQ has quite powerful [Webhooks](https://docs.vernemq.com/plugin-development/webhookplugins) — much easier for a one-off hack than a full native plugin.  
+You may reuse my config `mqtt-mitm/vernemq.conf` or create your own.
 
 A simple Flask/Python script — and I could not just view messages but modify their payloads.  
+You can find the full script I used in `mqtt-mitm/webhook_verchange.py`, here is the main transformation:
+```python
+@api.route('/verchange', methods=['POST'])      
+def verchange():      
+    req = request.get_json(force=True)
+    print(req)
+    topic = req['topic']
+    payload = json.loads(req['payload'])
+    if (topic[0:3] == "gw/") and (topic[19:] == "/MessageReceived") and ('APSPlayload' in payload):               
+        aps = payload['APSPlayload']
+        if (aps[0:8] == "0x1D5F11") and (aps[20:42] == "0A302E302E305F30303039"):
+            payload['APSPlayload'] = aps.replace('0A302E302E305F30303039', '0A302E302E305F30303031')
+            return json.dumps({"result":"ok", "modifiers": {"payload": json.dumps(payload)}})
+    return json.dumps({"result":"ok"})
+```
 
 I tried to guess the format of the version message. Some bytes looked like magic header, one byte was clearly a sequence number (that's why repeating on other handshake didn't work), `0A` looked like the string length, other ones maybe some numeric version and data tags and types.  
 
@@ -97,14 +127,14 @@ Here it downloads the update binary, well, here the progress is about 0%, and BI
 I was able to `wget` the URL, but in a couple of minutes the url was dead.  
 So, I finally had an OTA file for FW version `0.0.0-0003`.  
 
-### Restoring the fresh OTA
+## Restoring the fresh OTA
 I looked at `hexdump` of the `0.0.0-0003` OTA and fast-forwarded to the very end. It has some strings, some bytes, some `FF`s, 4 bytes of something like checksum and then EOF.  
 I opened the original flash dump, found a very similar part, and exported a range from the beginning to the checksum.  
 Starting from `00040000` there is other firmware copy (one of them works, other is used for OTA). I exported that too.  
 
 `make_ota.py` from [z03mmc project](https://github.com/devbis/z03mmc) handled all three files well. Time to try updating with z2m.  
 
-### Messing with file versions
+## Messing with file versions
 And as earlier the update did not work — the switch ignored the command. Also the hub itself could not apply the OTA. But it should work somehow!  
 Maybe firmware ensures it is upgrading to the greater version. Maybe I could make the file look like a more fresh one?
 
