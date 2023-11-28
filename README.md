@@ -8,6 +8,8 @@ Binding allows simple automations (this wireless switch controls that wired one)
 The original firmware does not support binding (you can bind, but switches ignore that), so I needed to use some custom firmware.  
 FW development itself is a good task itself, and I used `simpleSwitch` demo from Telink Zigbee SDK with minimal modifications.  
 
+<img src="pictures/pcb_front.jpg" width="40%"> | <img src="pictures/pcb_back.jpg" width="40%">
+
 I soldered some wires to one switch and was able to read the original firmware and write a custom one.  
 [TLSRPGM](https://github.com/pvvx/TLSRPGM) after recompilation just works on TLSR8258 (e.g. EBYTE Z5812 module).  
 
