@@ -2,6 +2,11 @@
 Notes on reverse engineering some Aqara devices — wireless E1 mini switch and E1 USB hub  
 Keywords: `lumi.remote.acn003`, `lumi.remote.acn004`, `WXKG16LM`, `WXKG17LM`, `aqara`, `switch`, `E1`, `wireless`, `tlsr8258`, `zigbee`  
 
+## TL;DR
+If you have a flash dump, just use [`fw/extract_ota.py`](fw/extract_ota.py) to extract OTA images.  
+Otherwise, you can spoof a firmware version to trick MI or Aqara app into pushing an update, then find URL in logs and download the image.  
+To force original firmware to accept OTA, use [`make_ota.py`](https://github.com/devbis/z03mmc/blob/master/tools/make_ota.py)` -v FAKE_VER` where `FAKE_VER` is slightly higher than installed one
+
 ## The problem and the task
 I have a bunch of Aqara E1 switches (ones with relays and wireless ones) and I want to use Zigbee binding.  
 Binding allows simple automations (this wireless switch controls that wired one) to work when hub is down (or there is interferention on coordinator).  
@@ -198,6 +203,16 @@ Starting from `00040000` there is other firmware copy (one of them works, other 
 
 `make_ota.py` from [z03mmc project](https://github.com/devbis/z03mmc) handled all three files well. Time to try updating with z2m.  
 The binaries can be found in `fw/` directory
+
+## Restoring the OTA image, the easy way
+While finishing this article I decided to write a tool which extracts OTA images from a flash dump.  
+I learned that the length of an image is just writtent in its header, thus images are easy to extract.  
+So, take a look at [`fw/extract_ota.py`](fw/extract_ota.py):
+```shell
+$ ./extract_ota.py fullflash-orig.bin
+image size 159140 0x00026DA4 -> fullflash-orig.bin-A-115f-2b0b-00000007.bin
+image size 161940 0x00027894 -> fullflash-orig.bin-B-115f-2b0b-00000009.bin
+```
 
 ## Messing with file versions
 And as earlier the update did not work — the switch ignored the command. Also the hub itself could not apply the OTA. But it should work somehow!  
