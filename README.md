@@ -30,9 +30,9 @@ There seemed to be few ways I possibly could see an OTA in action:
   * maybe I could modify the original dump to make it report an older version and receive an OTA
 
 All that failed.
-  * My switch had a fresh version (`0.0.0-0009`, file version 9)
+  * My switch had a fresh version (`0.0.0_0009`, file version 9)
   * The hub uses some crypted handshake when joining a device (some varying data to device and some varying data back) and didn't accept my firmware
-  * I changed some bytes in original dump from 9 to 8, that changed a version z2m sees when attempting an OTA, but vendor app continued to report `0.0.0-0009` version
+  * I changed some bytes in original dump from 9 to 8, that changed a version z2m sees when attempting an OTA, but vendor app continued to report `0.0.0_0009` version
 
 Also I took a risk of losing telnet and upgraded the hub (hoping it then would suggest a fresh FW for the switch). Still no update, but it took few hours for me to restore telnet.  
   * [Enable telnet by button clicks](https://github.com/niceboygithub/AqaraGateway/blob/master/README.md#manually-enable-telnet): 5-2-2-2-2-2 (led blinks green 2 times)
@@ -64,8 +64,8 @@ The connection to the cloud is protected (obviously), so before messing with TLS
 
 ### Version report in MQTT
 I started socat as a TCP proxy `1884 -> localhost:1883`, connected with MQTT client (MQTTX in my case) and subscribed to the topics `miio_client` subscribes.  
-Found lots of events, and payload in one of them was ending with `302E302E302D30303039` — which is the version `0.0.0-0009` shown by the app. Nice! Let's try to hijack that thing!  
-Using the MQTTX I copy-pasted the original message and changed last char from 9 to 8. Et voilà! The app reported `0.0.0-0008` but still no update.  
+Found lots of events, and payload in one of them was ending with `302E302E305F30303039` — which is the version `0.0.0_0009` shown by the app. Nice! Let's try to hijack that thing!  
+Using the MQTTX I copy-pasted the original message and changed last char from 9 to 8. Et voilà! The app reported `0.0.0_0008` but still no update.  
 ![manual version fix](pictures/manual_version_fix.png)
 I tried changing other bytes of that message but for no avail.  
 Repeating that message on other handshake didn't work at all.  
@@ -116,7 +116,7 @@ def verchange():
 
 I tried to guess the format of the version message. Some bytes looked like magic header, one byte was clearly a sequence number (that's why repeating on other handshake didn't work), `0A` looked like the string length, other ones maybe some numeric version and data tags and types.  
 
-So I just matched the original version string in a payload of given length, replaced it with `0.0.0-0001` and… It works!  
+So I just matched the original version string in a payload of given length, replaced it with `0.0.0_0001` and… It works!  
 The app showed my spoofd version and suggested an OTA to a `0.0.0-3`.  
 Wait, but there is `0.0.0-9` already on my switch! OK, just let's see what happens.  
 
@@ -127,10 +127,10 @@ There was no file in `/data` (or I haven't noticed it), but definitely something
 I started `miio_client` again with verbose logging, retried the OTA and scrolled through the ton of logs, down to top.  
 Here it downloads the update binary, well, here the progress is about 0%, and BINGO! Here is a download URL.  
 I was able to `wget` the URL, but in a couple of minutes the url was dead.  
-So, I finally had an OTA file for FW version `0.0.0-0003`.  
+So, I finally had an OTA file for FW version `0.0.0_0003`.  
 
 ## Restoring the fresh OTA
-I looked at `hexdump` of the `0.0.0-0003` OTA and fast-forwarded to the very end. It has some strings, some bytes, some `FF`s, 4 bytes of something like checksum and then EOF:  
+I looked at `hexdump` of the `0.0.0_0003` OTA and fast-forwarded to the very end. It has some strings, some bytes, some `FF`s, 4 bytes of something like checksum and then EOF:  
 ```shell
 0002b750  01 00 00 00 61 69 6f 74  2d 7a 69 67 62 65 65 33  |....aiot-zigbee3|
 0002b760  2e 30 2d 61 75 74 68 00  6d 69 6f 74 2d 7a 69 67  |.0-auth.miot-zig|
@@ -207,6 +207,13 @@ Yes, I can!
   * `make_ota.py -v 13 lumi.remote.acn003-0003.bin`
   * `node scripts/add.js ../115f-2b0b-00000007-lumi.remote.acn003-0003.zigbee`
   * It upgrades!
+
+This did not work well with version 7 -- the upgrade process started all over again after going to 100%.  
+I noticed byte at `0x08` in this version was `00` while other firmwares had `4b`. Maybe it is a marker for active/backup image in split flash layout. I cleared a marker `5d 02` added by `tools/tl_check_fw.py`, changed that byte to `4b`, deleted the checksum in the end, called `tools/tl_check_fw.py` on the resulting file. CRC did not change.
+That means
+  * CRC initially was calculated with `4b` at position `08`
+  * firmware upgrade restarts when it sees CRC mismatch
+  * broken CRC in file leads to OTA loop
 
 So, if I change the version in an image header to 13, the firmware "upgrades" even from version 9 to version 3.  
 It was surprising for me that version 3 I got from Xiaomi cloud is not accepted by the hub, but works well with z2m.  
